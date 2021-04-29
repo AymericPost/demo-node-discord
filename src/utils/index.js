@@ -23,3 +23,28 @@ export async function asyncForEach(array, cb) {
         await cb(array[i]);
     }
 }
+
+export function asyncWhileEach(array, cb) {
+    return new Promise( async (resolve, reject) => {
+        const resultArray = [];
+        let i = 0;
+
+        if(!array[0])
+            reject("Ceci n'est pas un tableau");
+
+        while(true) {
+            if(array[i]) {
+                resultArray.push( 
+                    await cb(array[i])
+                    .catch(err => {
+                        reject(err)
+                    }) 
+                );
+                i++;
+            } else {
+                resolve(resultArray);
+                break;
+            }
+        }
+    });
+}

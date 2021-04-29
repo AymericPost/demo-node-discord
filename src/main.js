@@ -1,7 +1,7 @@
 import axios from "axios";
 import mongoose from "mongoose";
 
-import { fetchRss, asyncForEach } from "./utils";
+import { fetchRss, asyncForEach, asyncWhileEach } from "./utils";
 import config from "../config.json";
 import RssGUID from "./models/RssGUID";
 
@@ -9,7 +9,7 @@ export default async function main() {
 
     const parsedRSS = await fetchRss();
 
-    const items = parsedRSS.rss.channel[0].item;
+    const items = parsedRSS.rss.channel[0].item.reverse();
 
     const embeds = [];
 
@@ -18,7 +18,7 @@ export default async function main() {
             guid: anItem.link[0]
         });
 
-        if (embeds.length < 10 && !hasAlreadyBeenPosted) {
+        if (!hasAlreadyBeenPosted) {
             embeds.push({
                 title: anItem.title[0],
                 description: anItem.description[0],
@@ -28,49 +28,33 @@ export default async function main() {
                 url: anItem.link[0],
                 timestamp: new Date(anItem.pubDate[0])
             });
-
-            
-            // const guid = new RssGUID({
-            //     guid: anItem.link[0]
-            // });
-
-            // guid.save();
-
         }
     });
 
-    console.log(await RssGUID.countDocuments())
-    // items.forEach(async anItem => {
-    //     const hasAlreadyBeenPosted = await RssGUID.exists({
-    //         guid: anItem.link[0]
-    //     });
+    asyncWhileEach(embeds, async embed => {
+        return await (new Promise((resolve, reject) => {
+            setTimeout(() => {
+                axios
+                    .post(config["discord-webhook"], {
+                        embeds: [embed]
+                    })
+                    .then(async () => {
+                        const guid = new RssGUID({
+                            guid: embed.url
+                        });
 
-    //     if (embeds.length < 10 && !hasAlreadyBeenPosted) {
-    //         embeds.push({
-    //             title: anItem.title[0],
-    //             description: anItem.description[0],
-    //             image: {
-    //                 url: anItem.enclosure[0].$.url
-    //             },
-    //             url: anItem.link[0],
-    //             timestamp: new Date(anItem.pubDate[0])
-    //         });
-
-    //         console.log(embeds)
-    //         // const guid = new RssGUID({
-    //         //     guid: anItem.link[0]
-    //         // });
-
-    //         // guid.save();
-
-    //     }
-    // })
-
-
-    // axios.post(config["discord-webhook"], {
-    //     embeds: embeds.reverse()
-    // }).catch(err => {
-    //     console.log(err)
-    // })
-
+                        resolve(await guid.save());
+                    })
+                    .catch(err => {
+                        reject(err)
+                    })
+            }, 1000);
+        }));
+    })
+    .catch(err => {
+        console.error(err);
+    })
+    .finally(() => {
+        mongoose.connection.close();
+    });
 }
